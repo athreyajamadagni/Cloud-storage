@@ -8,7 +8,7 @@ const Header = ({ user, onLogout }) => (
         <div className="bg-indigo-600 p-2 rounded-lg">
           <Folder className="w-6 h-6 text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">MyCloud Storage</h1>
+        <h1 className="text-2xl font-bold text-gray-900">JamCloud Storage</h1>
       </div>
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2 text-sm text-gray-600">
