@@ -1,4 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
 body {
+  @apply bg-gradient-to-br from-blue-50 via-indigo-50 to-white text-gray-800;
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
