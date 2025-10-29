@@ -29,7 +29,7 @@ const AuthScreen = ({ onLogin, onSignUp, onGoogleSignIn }) => {
             <Folder className="w-12 h-12 text-white" />
           </div>
         </div>
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">JamCloud Storage</h2>
+        <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">MyCloud Storage</h2>
         <p className="text-center text-gray-600 mb-8">Secure cloud storage for all your files</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

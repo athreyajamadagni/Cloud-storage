@@ -1,4 +1,3 @@
-// src/pages/CloudDashboard.jsx
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import AuthScreen from "../components/Auth/AuthScreen";
@@ -16,23 +15,17 @@ const CloudDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [storageUsed, setStorageUsed] = useState(0);
-  const [storageLimit] = useState(10 * 1024 * 1024 * 1024); // 10 GB
+  const [storageLimit] = useState(10 * 1024 * 1024 * 1024); // 10GB
 
-  /* ---------- life-cycle ---------- */
   useEffect(() => {
     loadUserData();
   }, []);
 
-  /* ---------- storage helpers ---------- */
-  const get = (key) => window.storage.get({ key }).then((r) => r.value);
-  const set = (key, value) => window.storage.set({ key, value });
-  const list = (prefix) => window.storage.keys({ keyPrefix: prefix }).then((r) => r.keys);
-  const remove = (key) => window.storage.remove({ key });
-
   const loadUserData = async () => {
     try {
-      const u = await get("current_user");
-      if (u) {
+      const userData = await window.storage.get("current_user");
+      if (userData) {
+        const u = JSON.parse(userData.value);
         setUser(u);
         await loadFiles(u.id);
       }
@@ -43,49 +36,52 @@ const CloudDashboard = () => {
 
   const loadFiles = async (userId) => {
     try {
-      const data = await get(`files_${userId}`);
-      if (data) {
-        setFiles(data.files || []);
-        setStorageUsed(data.storageUsed || 0);
+      const result = await window.storage.get(`files_${userId}`);
+      if (result) {
+        const fileData = JSON.parse(result.value);
+        setFiles(fileData.files);
+        setStorageUsed(fileData.storageUsed || 0);
       }
     } catch {
       setFiles([]);
     }
   };
 
-  /* ---------- auth ---------- */
   const handleSignUp = async (email, password, name) => {
     const userId = "user_" + Date.now();
     const newUser = { id: userId, email, name, password };
-
-    await set(`user_${userId}`, newUser);
-    await set("current_user", newUser);
-    await set(`files_${userId}`, { files: [], storageUsed: 0 });
-
+    await window.storage.set(`user_${userId}`, JSON.stringify(newUser));
+    await window.storage.set("current_user", JSON.stringify(newUser));
+    await window.storage.set(
+      `files_${userId}`,
+      JSON.stringify({ files: [], storageUsed: 0 })
+    );
     setUser(newUser);
     setFiles([]);
-    setStorageUsed(0);
   };
 
   const handleLogin = async (email, password) => {
     try {
-      const keys = await list("user_");
-      for (const k of keys) {
-        const u = await get(k);
-        if (u && u.email === email && u.password === password) {
-          await set("current_user", u);
-          setUser(u);
-          await loadFiles(u.id);
-          return;
+      const keys = await window.storage.list("user_");
+      if (keys && keys.keys) {
+        for (const key of keys.keys) {
+          const result = await window.storage.get(key);
+          if (result) {
+            const userData = JSON.parse(result.value);
+            if (userData.email === email && userData.password === password) {
+              await window.storage.set("current_user", JSON.stringify(userData));
+              setUser(userData);
+              await loadFiles(userData.id);
+              return;
+            }
+          }
         }
       }
-      alert("Invalid credentials");
     } catch {
-      alert("Login failed");
+      alert("Invalid credentials");
     }
   };
 
-  /* ---------- file ops ---------- */
   const handleFileUpload = async (e) => {
     const uploadedFiles = Array.from(e.target.files);
     setLoading(true);
@@ -94,69 +90,66 @@ const CloudDashboard = () => {
       const file = uploadedFiles[i];
       setUploadProgress(((i + 1) / uploadedFiles.length) * 100);
 
-      const data = await new Promise((res) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => res(ev.target.result);
+      const reader = new FileReader();
+      await new Promise((resolve) => {
+        reader.onload = async (event) => {
+          const newFile = {
+            id: "file_" + Date.now(),
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            data: event.target.result,
+            uploadedAt: new Date().toISOString(),
+          };
+
+          const updatedFiles = [...files, newFile];
+          const newStorageUsed = storageUsed + file.size;
+          await window.storage.set(
+            `files_${user.id}`,
+            JSON.stringify({ files: updatedFiles, storageUsed: newStorageUsed })
+          );
+          setFiles(updatedFiles);
+          setStorageUsed(newStorageUsed);
+          resolve();
+        };
         reader.readAsDataURL(file);
       });
-
-      const newFile = {
-        id: "file_" + Date.now(),
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        data,
-        uploadedAt: new Date().toISOString(),
-      };
-
-      const updated = [...files, newFile];
-      const used = storageUsed + file.size;
-
-      await set(`files_${user.id}`, { files: updated, storageUsed: used });
-      setFiles(updated);
-      setStorageUsed(used);
     }
     setLoading(false);
     setUploadProgress(0);
   };
 
   const handleFileDownload = (file) => {
-    const a = document.createElement("a");
-    a.href = file.data;
-    a.download = file.name;
-    a.click();
+    const link = document.createElement("a");
+    link.href = file.data;
+    link.download = file.name;
+    link.click();
   };
 
   const handleFileDelete = async (id) => {
+    const updatedFiles = files.filter((f) => f.id !== id);
     const deleted = files.find((f) => f.id === id);
-    if (!deleted) return;
-
-    const updated = files.filter((f) => f.id !== id);
-    const used = storageUsed - deleted.size;
-
-    await set(`files_${user.id}`, { files: updated, storageUsed: used });
-    setFiles(updated);
-    setStorageUsed(used);
+    const newStorageUsed = storageUsed - (deleted?.size || 0);
+    await window.storage.set(
+      `files_${user.id}`,
+      JSON.stringify({ files: updatedFiles, storageUsed: newStorageUsed })
+    );
+    setFiles(updatedFiles);
+    setStorageUsed(newStorageUsed);
   };
 
   const handleLogout = async () => {
-    await remove("current_user");
+    await window.storage.delete("current_user");
     setUser(null);
     setFiles([]);
-    setStorageUsed(0);
   };
 
-  /* ---------- render ---------- */
   if (!user)
     return (
-      <AuthScreen
-        onLogin={handleLogin}
-        onSignUp={handleSignUp}
-        onGoogleSignIn={() => {}}
-      />
+      <AuthScreen onLogin={handleLogin} onSignUp={handleSignUp} onGoogleSignIn={() => {}} />
     );
 
-  const filtered = files.filter((f) =>
+  const filteredFiles = files.filter((f) =>
     f.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -188,7 +181,7 @@ const CloudDashboard = () => {
         <div className="bg-white p-6 rounded-lg shadow">
           {viewMode === "grid" ? (
             <FileGridView
-              files={filtered}
+              files={filteredFiles}
               onDownload={handleFileDownload}
               onDelete={handleFileDelete}
               getFileIcon={getFileIcon}
@@ -196,7 +189,7 @@ const CloudDashboard = () => {
             />
           ) : (
             <FileListView
-              files={filtered}
+              files={filteredFiles}
               onDownload={handleFileDownload}
               onDelete={handleFileDelete}
               getFileIcon={getFileIcon}
